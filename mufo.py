@@ -1,8 +1,10 @@
 import pygame
 import os
+from leaderboard import Result, Player, Game, Score
 
 # Load pygame
 pygame.init()
+Game.initialize_database()
 
 # Load mixer mode for music
 pygame.mixer.init()
@@ -19,7 +21,6 @@ pygame.display.set_caption('Mû.F.O')
 clock = pygame.time.Clock()
 FPS = 60
 
-
 # Define player action variables
 moving_left = False
 moving_right = False
@@ -30,6 +31,8 @@ scroll_thresh = SCREEN_WIDTH // 2
 screen_scroll = [0, 0]
 bg_scroll = [0, 0] 
 
+# Define global variable for Score
+current_score = Score(None, None)
 
 # Load sound effects
 navigation_sound = pygame.mixer.Sound("assets/sounds/effects/navigation.mp3")
@@ -51,6 +54,8 @@ print(f"Loaded {len(background_frames)} frames.")
 
 # Load game font
 font_path = "assets/fonts/press-start-2p.ttf"
+font_size = 24
+custom_font = pygame.font.Font(font_path, font_size)
 
 # Create Button
 class Button():
@@ -157,17 +162,52 @@ def start_game():
 def show_leaderboard():
     global game_active
     game_active = True
+    leaderboard_data = Result.get_leaderboard()
+    print(f"Leaderboard data to display: {leaderboard_data}")
+
+    colors = [
+        (192, 192, 192), (192, 192, 192),  # Silver
+        (255, 165, 0), (255, 165, 0),      # Orange
+        (0, 0, 255), (0, 0, 255),          # Blue
+        (0, 128, 0), (0, 128, 0),          # Green
+        (255, 0, 0), (255, 0, 0)           # Red
+    ]
 
     while game_active:
-        draw_title_bg(background_frames)  # Use the same background animation as the title screen
-
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
                 exit()
-            if event.type == pygame.KEYDOWN:
+            elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
-                    game_active = False  # Go back to the title screen
+                    game_active = False  # Exit leaderboard screen on ESC key
+
+        draw_title_bg(background_frames)  # Use the same background animation as the title screen
+        title = custom_font.render("Leaderboard", True, (255, 255, 255))
+        screen.blit(title, (SCREEN_WIDTH // 2 - title.get_width() // 2, 50))
+
+        # Display column headers with increased spacing
+        name_header = custom_font.render("Name", True, (255, 255, 255))
+        score_header = custom_font.render("Score", True, (255, 255, 255))
+        header_x = SCREEN_WIDTH // 2 - (name_header.get_width() + score_header.get_width()) // 2
+        screen.blit(name_header, (header_x, 150))
+        screen.blit(score_header, (header_x + name_header.get_width() + 100, 150))  # Adjusting spacing
+
+        y_offset = 200
+        rank_x = SCREEN_WIDTH // 2 - 200
+
+        # Display placeholders for ranks in the first column
+        for i in range(10):
+            rank_text = custom_font.render(f"{i + 1}", True, colors[i])
+            screen.blit(rank_text, (rank_x, y_offset + i * 40))
+
+        # Display actual leaderboard data with increased spacing
+        for i, (username, game_title, score) in enumerate(leaderboard_data[:10]):
+            username_text = custom_font.render(f"{username}", True, colors[i])
+            screen.blit(username_text, (header_x, y_offset + i * 40))
+
+            score_text = custom_font.render(f"{score}", True, colors[i])
+            screen.blit(score_text, (header_x + name_header.get_width() + 100, y_offset + i * 40))  # Adjusting spacing
 
         pygame.display.update()
         clock.tick(FPS)
@@ -261,7 +301,7 @@ def title_screen():
         clock.tick(FPS)
 
 def run_game():
-    global game_active, paused, moving_left, moving_right, moving_up, moving_down, screen_scroll, bg_scroll
+    global game_active, paused, moving_left, moving_right, moving_up, moving_down, screen_scroll, bg_scroll, current_score
     
     # Load game background image for active play
     game_bg = pygame.image.load("assets/img/map/map-0.png")
@@ -284,9 +324,13 @@ def run_game():
         bg_scroll[0] = max(-(bg_width - SCREEN_WIDTH), min(0, bg_scroll[0]))
         bg_scroll[1] = max(-(bg_height - SCREEN_HEIGHT), min(0, bg_scroll[1]))
 
+        if player.rect.colliderect(target.rect):
+            current_score.update_score(target_points=10)
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 game_active = False
+                current_score.save_score()
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_a:
                     moving_left = True
@@ -312,6 +356,7 @@ def run_game():
 
         pygame.display.update()
 
+    current_score.save_score()
     pygame.quit()
     exit()
 
